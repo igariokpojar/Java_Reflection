@@ -1,21 +1,30 @@
 package JSONwriter;
 
-import data.Address;
-import data.Company;
-import data.Person;
+import data.*;
 
+import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 
 public class Main {
 
     public static void main(String[] args) throws IllegalAccessException {
 
-        Address address = new Address("Chicago Way", (short) 484);
-        Company company = new Company("IBM","Chicago",new Address("Main str",(short) 300));
-        Person person = new Person("Alex", true, 40, 100.225f, address, company);
+        Actor actor1 = new Actor("Anatol Durbala",new String[]{"Varvara","Ora de Ras"});
 
-        String json = objectToJson(person, 0);
+        Movie movie = new Movie("Underworld",9.6f,new String[]{"Action","Thriller","Fantastic"});
+
+        String json = objectToJson(actor1,0);
         System.out.println(json);
+
+        String json1 = objectToJson(movie,0);
+        System.out.println(json1);
+
+//        Address address = new Address("Chicago Way", (short) 484);
+//        Company company = new Company("IBM","Chicago",new Address("Main str",(short) 300));
+//        Person person = new Person("Alex", true, 40, 100.225f, address, company);
+//
+//        String json = objectToJson(person, 0);
+//        System.out.println(json);
 
     }
     public static String objectToJson(Object instance, int indentSize) throws IllegalAccessException{
@@ -37,9 +46,12 @@ public class Main {
             stringBuilder.append(":");
 
             if (field.getType().isPrimitive()){
-                stringBuilder.append(formatPrimitiveValue(field,instance));
+                stringBuilder.append(formatPrimitiveValue(field.get(instance),field.getType()));
             } else if (field.getType().equals(String.class)) {
                 stringBuilder.append(formatStringValue(field.get(instance).toString()));
+            } else if (field.getType().isArray()) {
+                stringBuilder.append(arrayToJson(field.get(instance),indentSize+1));
+
             }else{
                 stringBuilder.append(objectToJson(field.get(instance),indentSize+1));
             }
@@ -59,17 +71,44 @@ public class Main {
         }
         return stringBuilder.toString();
     }
+    private static String arrayToJson(Object arrayInstance,int intendSize){
+       StringBuilder stringBuilder = new StringBuilder();
+       int arrayLength = Array.getLength(arrayInstance);
 
-    private static String formatPrimitiveValue(Field field,Object parentInstance) throws IllegalAccessException {
-        if(field.getType().equals(boolean.class)
-        || field.getType().equals(int.class)
-        || field.getType().equals(long.class)
-        || field.getType().equals(short.class)){
-            return field.get(parentInstance).toString();
-        } else if (field.getType().equals(double.class) || field.getType().equals(float.class)) {
-            return String.format("%02f",field.get(parentInstance));
+       Class<?> componentType = arrayInstance.getClass().getComponentType();
+
+       stringBuilder.append("[");
+       stringBuilder.append("\n");
+        for (int i = 0; i < arrayLength; i++) {
+            Object element = Array.get(arrayInstance,i);
+
+            if (componentType.isPrimitive()){
+                stringBuilder.append(indent(intendSize+1));
+                stringBuilder.append(formatPrimitiveValue(element,componentType));
+            } else if (componentType.equals(String.class)) {
+                stringBuilder.append(indent(intendSize+1));
+                stringBuilder.append(formatStringValue(element.toString()));
+            }
+             if (i != arrayLength){
+                 stringBuilder.append(",");
+             }
+            stringBuilder.append("\n");
         }
-        throw new RuntimeException(String.format("Type : %s is unsupported", field.getType().getName()));
+        stringBuilder.append(indent(intendSize));
+        stringBuilder.append("]");
+        return stringBuilder.toString();
+    }
+
+    private static String formatPrimitiveValue(Object instance, Class<?>type){
+        if(type.equals(boolean.class)
+        || type.equals(int.class)
+        || type.equals(long.class)
+        || type.equals(short.class)){
+            return instance.toString();
+        } else if (type.equals(double.class) || type.equals(float.class)) {
+            return String.format("%02f",instance);
+        }
+        throw new RuntimeException(String.format("Type : %s is unsupported", type.getTypeName()));
     }
     private static String formatStringValue(String value){
         return String.format("\"%s\"",value);
