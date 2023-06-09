@@ -10,8 +10,12 @@ public class Main {
     public static void main(String[] args) throws IllegalAccessException {
 
         Actor actor1 = new Actor("Anatol Durbala",new String[]{"Varvara","Ora de Ras"});
+        Actor actor2 = new Actor("Kate Beckinsale",new String[]{"Underworld Evolution"});
+        Actor actor3 = new Actor("Michael Sheen", new String[]{"Underworld Blood of Wars"});
+        Actor actor4 = new Actor("Bill Nighty", new String[]{ " Underworld Endless War"});
 
-        Movie movie = new Movie("Underworld",9.6f,new String[]{"Action","Thriller","Fantastic"});
+        Movie movie = new Movie("Underworld Future",9.6f,new String[]{"Action","Thriller","Fantastic"},
+                new Actor[]{actor1,actor2,actor3,actor4});
 
         String json = objectToJson(actor1,0);
         System.out.println(json);
@@ -71,7 +75,7 @@ public class Main {
         }
         return stringBuilder.toString();
     }
-    private static String arrayToJson(Object arrayInstance,int intendSize){
+    private static String arrayToJson(Object arrayInstance,int intendSize) throws IllegalAccessException {
        StringBuilder stringBuilder = new StringBuilder();
        int arrayLength = Array.getLength(arrayInstance);
 
@@ -88,6 +92,8 @@ public class Main {
             } else if (componentType.equals(String.class)) {
                 stringBuilder.append(indent(intendSize+1));
                 stringBuilder.append(formatStringValue(element.toString()));
+            }else {
+               stringBuilder.append(objectToJson(element,intendSize+1));
             }
              if (i != arrayLength){
                  stringBuilder.append(",");
