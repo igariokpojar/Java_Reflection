@@ -4,13 +4,14 @@ import dynami_config_loader.data.GameConfig;
 import dynami_config_loader.data.UserInterfaceConfig;
 
 import java.io.IOException;
+import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.file.Path;
 import java.util.Scanner;
 
-public class Main {
+public class ConfigLoaderLibrary {
 
     private static final Path GAME_CONFIG_PATH = Path.of("resources/game-properties.cfg");
     private static final Path UI_CONFIG_PATH = Path.of("resources/user-interface.cfg");
@@ -47,11 +48,28 @@ public class Main {
             }
             field.setAccessible(true);
 
-            Object parseValue = parseValue(field.getType(),propertyValue);
+            Object parseValue;
+
+            if (field.getType().isArray()){
+                parseValue=parseArray(field.getType().getComponentType(),propertyValue);
+            }else {
+                parseValue=parseValue(field.getType(),propertyValue);
+            }
+
             field.set(configInstance,parseValue);
 
         }
         return configInstance;
+    }
+    private static Object parseArray(Class<?> arrayElementType,String value){
+        String[] elementValue = value.split(",");
+
+        Object arrayObject = Array.newInstance(arrayElementType,elementValue.length);
+
+        for (int i = 0; i < elementValue.length; i++) {
+            Array.set(arrayObject,i,parseValue(arrayElementType,elementValue[i]));
+        }
+        return arrayObject;
     }
 
     private static Object parseValue(Class<?> type,String value){
