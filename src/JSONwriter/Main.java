@@ -24,7 +24,7 @@ public class Main {
         System.out.println(json1);
 
 //        Address address = new Address("Chicago Way", (short) 484);
-//        Company company = new Company("IBM","Chicago",new Address("Main str",(short) 300));
+//        Company company = new Company("IBM","Chicago",new Address("auction.Main str",(short) 300));
 //        Person person = new Person("Alex", true, 40, 100.225f, address, company);
 //
 //        String json = objectToJson(person, 0);
