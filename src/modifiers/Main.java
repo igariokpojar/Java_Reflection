@@ -12,11 +12,11 @@ public class Main {
 
     public static void main(String[] args) {
 
-      //  printClassModifier(Auction.class);
-      //  printClassModifier(Bid.Builder.class);
-      //  printClassModifier(Serializable.class);
+        printClassModifier(Auction.class);
+        printClassModifier(Bid.Builder.class);
+        printClassModifier(Serializable.class);
 
-      //  printMethodModifiers(Auction.class.getDeclaredMethods());
+        printMethodModifiers(Auction.class.getDeclaredMethods());
 
         printFieldsModifiers(Auction.class.getDeclaredFields());
     }
