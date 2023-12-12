@@ -10,10 +10,6 @@ import java.util.*;
 
 import static annotations.Annotations.*;
 
-/**
- * Graph Execution with Inputs
- * https://www.udemy.com/course/java-reflection-master-class
- */
 public class Main {
 
     public static void main(String[] args) throws InvocationTargetException, IllegalAccessException {
