@@ -1,135 +1,107 @@
 package app;
 
-import annotations.InitializerClass;
-import annotations.InitializerMethod;
-import annotations.RetryOperation;
-import annotations.ScanPackages;
+import app.databases.SqlQueryBuilder;
 
-import javax.swing.*;
-import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.nio.file.*;
+import java.lang.reflect.Parameter;
 import java.util.*;
-import java.util.stream.Collectors;
 
+import static annotations.Annotations.*;
 
-@ScanPackages({"app","app.configs","app.databases","app.http"})
-    public class Main {
-    public static void main(String[] args) throws Throwable{
+/**
+ * Graph Execution with Inputs
+ * https://www.udemy.com/course/java-reflection-master-class
+ */
+public class Main {
 
-        initialize();
+    public static void main(String[] args) throws InvocationTargetException, IllegalAccessException {
+        SqlQueryBuilder sqlQueryBuilder = new SqlQueryBuilder(Arrays.asList("1", "2", "3"),
+                10,
+                "Movies",
+                Arrays.asList("Id", "Name"));
 
+        String sqlQuery = execute(sqlQueryBuilder);
+        System.out.println(sqlQuery);
     }
 
-    public static void initialize() throws Throwable {
-        ScanPackages scanPackage = Main.class.getAnnotation(ScanPackages.class);
+    public static <T> T execute(Object instance) throws InvocationTargetException, IllegalAccessException {
+        Class<?> clazz = instance.getClass();
 
-        if (scanPackage == null || scanPackage.value().length == 0){
-            return;
+        Map<String, Method> operationToMethod = getOperationToMethod(clazz);
+        Map<String, Field> inputToField = getInputToField(clazz);
+
+        Method finalResultMethod = findFinalResultMethod(clazz);
+
+        return (T) executeWithDependencies(instance, finalResultMethod, operationToMethod, inputToField);
+    }
+
+    private static Object executeWithDependencies(Object instance,
+                                                  Method currentMethod,
+                                                  Map<String, Method> operationToMethod,
+                                                  Map<String, Field> inputToField) throws InvocationTargetException, IllegalAccessException {
+        List<Object> parameterValues = new ArrayList<>(currentMethod.getParameterCount());
+
+        for (Parameter parameter : currentMethod.getParameters()) {
+            Object value = null;
+            if (parameter.isAnnotationPresent(DependsOn.class)) {
+                String dependencyOperationName = parameter.getAnnotation(DependsOn.class).value();
+                Method dependencyMethod = operationToMethod.get(dependencyOperationName);
+
+                value = executeWithDependencies(instance, dependencyMethod, operationToMethod, inputToField);
+            } else if (parameter.isAnnotationPresent(Input.class)) {
+                String inputName = parameter.getAnnotation(Input.class).value();
+
+                Field field = inputToField.get(inputName);
+                field.setAccessible(true);
+
+                value = field.get(instance);
+            }
+
+            parameterValues.add(value);
         }
-        List<Class<?>> classes = getAllClasses(scanPackage.value());
 
-        for (Class<?>clazz:classes){
-            if (!clazz.isAnnotationPresent(InitializerClass.class)){
+        return currentMethod.invoke(instance, parameterValues.toArray());
+    }
+
+    private static Map<String, Field> getInputToField(Class<?> clazz) {
+        Map<String, Field> inputNameToField = new HashMap<>();
+
+        for (Field field : clazz.getDeclaredFields()) {
+            if (!field.isAnnotationPresent(Input.class)) {
                 continue;
             }
-            List<Method> methods = getAllInitializingMethods(clazz);
 
-            Object instance= clazz.getDeclaredConstructor().newInstance();
-
-            for (Method method : methods){
-                method.invoke(instance,methods);
-            }
-        }
-    }
-    private static void callInitializingMethod(Object instance,Method method) throws Throwable {
-        RetryOperation retryOperation = method.getAnnotation(RetryOperation.class);
-
-        int numberOfRetries = retryOperation == null ? 0 : retryOperation.numberOfRetries();
-        while (true){
-            try {
-                method.invoke(instance);
-                break;
-            }catch (InvocationTargetException e){
-                Throwable targetException = e.getTargetException();
-                if (numberOfRetries> 0 && Set.of(retryOperation.retryException()).contains(targetException.getClass())){
-                    numberOfRetries--;
-
-                System.out.println("Retrying ...");
-                Thread.sleep(retryOperation.durationBetweenRetriesMs());
-            } else if (retryOperation !=null) {
-                    throw new Exception(retryOperation.failureMessage(),targetException);
-
-                }else {
-                    throw targetException;
-                }
-            }
-
+            Input input = field.getAnnotation(Input.class);
+            inputNameToField.put(input.value(), field);
         }
 
+        return inputNameToField;
     }
 
+    private static Map<String, Method> getOperationToMethod(Class<?> clazz) {
+        Map<String, Method> operationNameToMethod = new HashMap<>();
 
-    private static List<Method> getAllInitializingMethods(Class<?> clazz){
-
-        List<Method> initializingMethods = new ArrayList<>();
-        for (Method method : clazz.getDeclaredMethods()){
-            if (method.isAnnotationPresent(InitializerMethod.class)){
-                initializingMethods.add(method);
-
-
+        for (Method method : clazz.getDeclaredMethods()) {
+            if (!method.isAnnotationPresent(Operation.class)) {
+                continue;
             }
+
+            Operation operation = method.getAnnotation(Operation.class);
+
+            operationNameToMethod.put(operation.value(), method);
         }
-        return initializingMethods;
+        return operationNameToMethod;
     }
 
-    public static  List<Class<?>> getAllClasses(String ... packageNames) throws URISyntaxException, IOException, ClassNotFoundException {
-        List<Class<?>> allClasses = new ArrayList<>();
-
-        for (String packageName : packageNames){
-            String packageRelativePath = packageName.replace('.','/');
-
-            URI packageUri = Main.class.getResource(packageRelativePath).toURI();
-
-            if (packageUri.getScheme().equals("file")){
-                Path packageFullPath = Paths.get(packageUri);
-                allClasses.addAll(getAllPackageClasses(packageFullPath,packageName));
-            } else if (packageUri.getScheme().equals("jar")){
-                FileSystem fileSystem = FileSystems.newFileSystem(packageUri,Collections.emptyMap());
-
-                  Path packageFullPathInJar = fileSystem.getPath(packageRelativePath);
-                  allClasses.addAll(getAllPackageClasses(packageFullPathInJar,packageName));
-
-                  fileSystem.close();
+    private static Method findFinalResultMethod(Class<?> clazz) {
+        for (Method method : clazz.getDeclaredMethods()) {
+            if (method.isAnnotationPresent(FinalResult.class)) {
+                return method;
             }
         }
-               return allClasses;
+
+        throw new RuntimeException("No method found with FinalResult annotation");
     }
-
-    private static  List<Class<?>> getAllPackageClasses(Path packagePath, String packageName)throws IOException,ClassNotFoundException{
-        if (!Files.exists(packagePath)){
-            return Collections.emptyList();
-        }
-        List<Path> files = Files.list(packagePath)
-                .filter(Files::isRegularFile)
-                .collect(Collectors.toList());
-
-        List<Class<?>> classes = new ArrayList<>();
-
-        for (Path filePath : files){
-            String fileName = filePath.getFileName().toString();
-
-            if (fileName.endsWith("class")){
-                String classFullName = packageName + "." + fileName.replaceFirst("\\.class$","");
-                Class<?> clazz = Class.forName(classFullName);
-                classes.add(clazz);
-            }
-        }
-        return classes;
-    }
-
 }
